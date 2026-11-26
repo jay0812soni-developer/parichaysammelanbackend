@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { config, missingCriticalEnv } from './config.js';
 import { ensureAdminSeeded } from './auth.js';
 import { entriesRouter } from './routes/entries.js';
@@ -8,6 +10,7 @@ import { adminRouter } from './routes/admin.js';
 import { pool } from './db.js';
 import { apiLimiter, authLimiter, securityHeaders } from './security.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
@@ -39,6 +42,17 @@ app.get('/health', async (_req, res) => {
     res.status(503).json({ ok: false });
   }
 });
+
+// Force trailing slash so /admin assets resolve (avoid Express /admin↔/admin/ loop).
+const adminDir = path.join(__dirname, '..', 'public', 'admin');
+app.use((req, res, next) => {
+  const pathOnly = (req.originalUrl || '').split('?')[0];
+  if (pathOnly === '/admin') {
+    return res.redirect(302, '/admin/');
+  }
+  next();
+});
+app.use('/admin', express.static(adminDir, { index: 'index.html', redirect: false }));
 
 app.use('/api/entries', entriesRouter);
 app.use('/api/uploads', uploadsRouter);

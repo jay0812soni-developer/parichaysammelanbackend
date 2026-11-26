@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parichay Admin Login</title>
+  <base href="/admin/" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body class="auth">
+  <main class="card">
+    <p class="brand">PARICHAY SAMMELAN</p>
+    <h1>Admin login</h1>
+    <p class="muted">Operator console for biodata entries</p>
+    <form id="form" method="post" action="/admin/">
+      <label>Username<input id="username" name="username" autocomplete="username" required /></label>
+      <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required /></label>
+      <p id="error" class="error" hidden></p>
+      <button type="submit">Log in</button>
+    </form>
+  </main>
+  <script src="/admin/admin.js"></script>
+  <script>
+    if (Admin.getToken()) location.href = '/admin/dashboard.html';
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = document.getElementById('error');
+      err.hidden = true;
+      try {
+        const data = await Admin.api('POST', '/api/admin/login', {
+          username: document.getElementById('username').value.trim(),
+          password: document.getElementById('password').value,
+        }, false);
+        Admin.setToken(data.token);
+        location.href = '/admin/dashboard.html';
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>

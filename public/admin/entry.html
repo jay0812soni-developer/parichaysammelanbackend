@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Entry details · Parichay Admin</title>
+  <base href="/admin/" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="brand">PARICHAY Admin</p>
+      <h1 id="title">Entry</h1>
+      <p class="muted" id="meta"></p>
+    </div>
+    <div class="actions">
+      <button type="button" class="ghost" id="btnDelete">Delete</button>
+      <a class="link" href="/admin/dashboard.html">← Dashboard</a>
+      <button type="button" class="ghost" id="logout">Logout</button>
+    </div>
+  </header>
+
+  <p id="error" class="error" hidden style="padding: 0 clamp(16px, 4vw, 40px)"></p>
+
+  <section class="panel">
+    <div class="row">
+      <h2>Profile</h2>
+      <img id="photo" class="photo" alt="Profile photo" hidden />
+    </div>
+    <dl class="detail-grid" id="fields"></dl>
+  </section>
+
+  <script src="/admin/admin.js"></script>
+  <script>
+    Admin.requireAuth();
+    document.getElementById('logout').onclick = () => Admin.logout();
+
+    const id = new URLSearchParams(location.search).get('id');
+    if (!id) location.href = '/admin/dashboard.html';
+
+    let entry = null;
+
+    function fmtDate(v) { return v ? String(v).slice(0, 19).replace('T', ' ') : '—'; }
+    function money(v) {
+      return Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    }
+
+    function add(dl, label, value) {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value == null || value === '' ? '—' : String(value);
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    }
+
+    document.getElementById('btnDelete').onclick = async () => {
+      if (!entry) return;
+      if (!confirm(`Delete entry for "${entry.name}"?`)) return;
+      try {
+        await Admin.api('DELETE', '/api/admin/entries/' + id);
+        location.href = '/admin/dashboard.html';
+      } catch (ex) {
+        alert(ex.message);
+      }
+    };
+
+    (async () => {
+      try {
+        const data = await Admin.api('GET', '/api/admin/entries/' + id);
+        entry = data.data;
+        document.getElementById('title').textContent = entry.name;
+        document.getElementById('meta').textContent =
+          `ID ${entry.id} · joined ${fmtDate(entry.created_at)}`;
+
+        if (entry.photo_url) {
+          const img = document.getElementById('photo');
+          img.src = entry.photo_url;
+          img.hidden = false;
+        }
+
+        const dl = document.getElementById('fields');
+        add(dl, 'Email', entry.email);
+        add(dl, 'WhatsApp', entry.whatsapp);
+        add(dl, 'Age', entry.age);
+        add(dl, 'Gender', entry.gender);
+        add(dl, 'Height (cm)', entry.height_cm);
+        add(dl, 'Manglik', entry.manglik);
+        add(dl, 'Marital status', entry.marital_status);
+        add(dl, 'Study', entry.study);
+        add(dl, 'Yearly income', '₹' + money(entry.yearly_income));
+        add(dl, 'Aadhaar', entry.aadhaar);
+        add(dl, 'Father', entry.father_name);
+        add(dl, 'Father gautra', entry.father_gautra);
+        add(dl, 'Mother', entry.mother_name);
+        add(dl, "Mother's father", entry.mother_father_name);
+        add(dl, 'Mother gautra', entry.mother_gautra);
+        add(dl, 'Mother parents address', entry.mother_parents_address);
+        add(dl, 'Present address', entry.present_address);
+        add(dl, 'Permanent address', entry.permanent_address);
+      } catch (ex) {
+        const err = document.getElementById('error');
+        err.textContent = ex.message;
+        err.hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>

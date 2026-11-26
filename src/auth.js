@@ -3,12 +3,20 @@ import bcrypt from 'bcryptjs';
 import { config } from './config.js';
 import { query } from './db.js';
 
+/** Upsert operator admin from env so login always matches ADMIN_USERNAME / ADMIN_PASSWORD */
 export async function ensureAdminSeeded() {
-  const rows = await query('SELECT id FROM admins WHERE username = ? LIMIT 1', [
+  const hash = await bcrypt.hash(config.admin.password, 12);
+  const existing = await query('SELECT id FROM admins WHERE username = ? LIMIT 1', [
     config.admin.username,
   ]);
-  if (rows.length) return;
-  const hash = await bcrypt.hash(config.admin.password, 12);
+  if (existing.length) {
+    await query('UPDATE admins SET password_hash = ? WHERE id = ?', [
+      hash,
+      existing[0].id,
+    ]);
+    console.log(`Admin credentials synced: ${config.admin.username}`);
+    return;
+  }
   await query('INSERT INTO admins (username, password_hash) VALUES (?, ?)', [
     config.admin.username,
     hash,

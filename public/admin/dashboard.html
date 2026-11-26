@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parichay Admin Dashboard</title>
+  <base href="/admin/" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="brand">PARICHAY Admin</p>
+      <h1>Dashboard</h1>
+    </div>
+    <button type="button" class="ghost" id="logout">Logout</button>
+  </header>
+
+  <section class="stats">
+    <div class="stat"><span>Total entries</span><strong id="s-entries">—</strong></div>
+    <div class="stat"><span>Page</span><strong id="s-page">—</strong></div>
+    <div class="stat"><span>Showing</span><strong id="s-showing">—</strong></div>
+  </section>
+
+  <section class="charts panel">
+    <h2>Insights</h2>
+    <div class="chart-grid">
+      <div class="chart-box"><canvas id="chartGender"></canvas></div>
+      <div class="chart-box"><canvas id="chartManglik"></canvas></div>
+      <div class="chart-box"><canvas id="chartMarital"></canvas></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="row">
+      <h2>Entries</h2>
+      <div class="row-actions">
+        <button type="button" id="btnCsv" class="ghost">Export CSV</button>
+      </div>
+    </div>
+    <form id="search" class="search">
+      <input id="q" placeholder="Search name / email / WhatsApp" />
+      <select id="gender">
+        <option value="">All genders</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+      <button type="submit">Filter</button>
+    </form>
+    <p id="error" class="error" hidden></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Age</th>
+            <th>Gender</th>
+            <th>WhatsApp</th>
+            <th>Study</th>
+            <th>Joined</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button type="button" class="ghost" id="prev">Previous</button>
+      <span id="pageLabel">Page 1</span>
+      <button type="button" class="ghost" id="next">Next</button>
+    </div>
+  </section>
+
+  <script src="/admin/admin.js"></script>
+  <script>
+    Admin.requireAuth();
+    document.getElementById('logout').onclick = () => Admin.logout();
+
+    let page = 1;
+    let totalPages = 1;
+    let charts = {};
+
+    function fmtDate(v) { return v ? String(v).slice(0, 10) : '—'; }
+
+    function paintChart(id, labels, data, label) {
+      const ctx = document.getElementById(id);
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(ctx, {
+        type: id === 'chartGender' ? 'doughnut' : 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label,
+            data,
+            backgroundColor: ['#6b2d2d', '#c9a227', '#1f7a4c', '#8a5a3a', '#b42318', '#5d6b6b'],
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: id === 'chartGender' } },
+          scales: id === 'chartGender' ? {} : { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      });
+    }
+
+    async function loadOverview() {
+      const data = await Admin.api('GET', '/api/admin/overview');
+      document.getElementById('s-entries').textContent = data.totals.entries;
+      const c = data.charts || {};
+      paintChart('chartGender', c.gender?.labels || [], c.gender?.data || [], 'Gender');
+      paintChart('chartManglik', c.manglik?.labels || [], c.manglik?.data || [], 'Manglik');
+      paintChart('chartMarital', c.marital?.labels || [], c.marital?.data || [], 'Marital');
+    }
+
+    function params() {
+      const p = new URLSearchParams();
+      const q = document.getElementById('q').value.trim();
+      const gender = document.getElementById('gender').value;
+      if (q) p.set('q', q);
+      if (gender) p.set('gender', gender);
+      p.set('page', String(page));
+      p.set('limit', '20');
+      return p;
+    }
+
+    async function loadEntries() {
+      const err = document.getElementById('error');
+      err.hidden = true;
+      try {
+        const data = await Admin.api('GET', '/api/admin/entries?' + params().toString());
+        totalPages = data.total_pages || 1;
+        page = data.page || 1;
+        document.getElementById('s-page').textContent = page + ' / ' + totalPages;
+        document.getElementById('s-showing').textContent = (data.data || []).length;
+        document.getElementById('pageLabel').textContent = `Page ${page} of ${totalPages} · ${data.total} total`;
+
+        const tbody = document.getElementById('rows');
+        tbody.innerHTML = '';
+        if (!data.data.length) {
+          tbody.innerHTML = '<tr><td colspan="8">No entries found.</td></tr>';
+          return;
+        }
+        for (const e of data.data) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${e.id}</td>
+            <td>${Admin.escape(e.name)}</td>
+            <td>${e.age ?? '—'}</td>
+            <td>${Admin.escape(e.gender)}</td>
+            <td>${Admin.escape(e.whatsapp)}</td>
+            <td>${Admin.escape(e.study)}</td>
+            <td>${fmtDate(e.created_at)}</td>
+            <td class="actions-cell">
+              <a class="link" href="/admin/entry.html?id=${e.id}">Details</a>
+              <button type="button" class="linkish danger" data-del="${e.id}" data-name="${Admin.escape(e.name)}">Delete</button>
+            </td>`;
+          tbody.appendChild(tr);
+        }
+        tbody.querySelectorAll('[data-del]').forEach((btn) => {
+          btn.onclick = () => deleteEntry(btn.getAttribute('data-del'), btn.getAttribute('data-name'));
+        });
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.hidden = false;
+      }
+    }
+
+    async function deleteEntry(id, name) {
+      if (!confirm(`Delete entry for "${name}"? Photo will also be removed.`)) return;
+      try {
+        await Admin.api('DELETE', '/api/admin/entries/' + id);
+        await loadOverview();
+        await loadEntries();
+      } catch (ex) {
+        alert(ex.message);
+      }
+    }
+
+    document.getElementById('btnCsv').onclick = async () => {
+      const p = params();
+      p.delete('page');
+      p.delete('limit');
+      p.set('format', 'csv');
+      const res = await fetch('/api/admin/entries?' + p.toString(), {
+        headers: { Authorization: 'Bearer ' + Admin.getToken() },
+      });
+      if (!res.ok) {
+        alert('CSV export failed');
+        return;
+      }
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'parichay-entries.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+
+    document.getElementById('search').addEventListener('submit', (e) => {
+      e.preventDefault();
+      page = 1;
+      loadEntries();
+    });
+    document.getElementById('prev').onclick = () => {
+      if (page > 1) { page -= 1; loadEntries(); }
+    };
+    document.getElementById('next').onclick = () => {
+      if (page < totalPages) { page += 1; loadEntries(); }
+    };
+
+    loadOverview().catch((e) => {
+      document.getElementById('error').textContent = e.message;
+      document.getElementById('error').hidden = false;
+    });
+    loadEntries();
+  </script>
+</body>
+</html>
