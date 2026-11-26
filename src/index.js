@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { config } from './config.js';
+import { config, missingCriticalEnv } from './config.js';
 import { ensureAdminSeeded } from './auth.js';
 import { entriesRouter } from './routes/entries.js';
 import { uploadsRouter } from './routes/uploads.js';
@@ -56,6 +56,13 @@ app.use((err, _req, res, _next) => {
 });
 
 async function boot() {
+  const missing = missingCriticalEnv();
+  if (missing.length) {
+    console.error(
+      'Missing Render Environment variables (Dashboard → Environment):',
+      missing.join(', ')
+    );
+  }
   try {
     await ensureAdminSeeded();
   } catch (e) {
